@@ -5,6 +5,7 @@
 
 #include <Arduino.h>
 #include <SD.h>
+#include <TFT_eSPI.h>
 
 #define SD_CS_PIN 16
 #define SCK_PIN 18
@@ -19,14 +20,18 @@
 #define I2S_SAMPLE_RATE 44100 // All .wav files have been given a 44100 sample rate upon creation
 
 #define AUDIO_DIR "/"
+#define AUDIO_WINDOW_RES 1000 // In bytes
+#define AUDIO_WINDOW_SZ 320 // In samples
+#define VOLUME 0.3
+#define I2S_BUF_FRAMES 3000
+#define I2S_STEREO_MULT 2
 
-#define AUDIO_WINDOW_SZ 400 // In samples
-#define VOLUME 0.2
+#define WAV_CACHE_SZ 12000 // In bytes
 
 // --- User Interface ---
 #define BACKGROUND_COLOR 0x0000
 #define PRIMARY_COLOR 0xFFFF
-#define ACCENT_COLOR_1 0xF800
+#define ACCENT_COLOR_1 0x7DFF
 #define TEXT_PADDING 3
 #define TEXT_SIZE 1
 #define LINE_HEIGHT TEXT_SIZE * 10 
@@ -36,5 +41,6 @@
 #define OK 1
 
 uint16_t load_tracklist_from_file(File directory, String* tracklist, uint32_t max_songs);
+void display_tracklist(TFT_eSPI* tft, String* tracklist, uint16_t y, uint16_t num_tracks_to_display, uint16_t num_tracks, uint16_t hovered_track_ind, uint16_t channel_1_ind);
 
 #endif // UTILS_H

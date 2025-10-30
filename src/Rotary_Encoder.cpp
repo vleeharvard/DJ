@@ -32,3 +32,17 @@ int8_t Rotary_Encoder::read_encoder() {
     last_clk_state = clk_state;
     return result;
 }
+
+bool Rotary_Encoder::read_button() {
+    bool output = false;
+
+    int button_state = digitalRead(sw_pin);
+    unsigned long current_time = millis();
+
+    if (button_state == LOW && (current_time - last_button_time) > 50) {
+        output = true;
+        last_button_time = current_time;
+    }
+
+    return output;
+}

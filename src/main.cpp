@@ -8,6 +8,7 @@
 #include "Wav_File.h"
 #include "Channel.h"
 #include "Utils.h"
+#include "Rotary_Encoder.h"
 
 // --- Constants ---
 #define MAX_SONGS 100
@@ -17,11 +18,12 @@
 // --- Variables ---
 String tracklist[MAX_SONGS];
 uint16_t track_count = 0;
-Wav_File* test_track = nullptr;
 TFT_eSPI tft = TFT_eSPI();
 size_t bytes_written;
+uint16_t selected_track_ind = 0;
 
 Channel* channel_1 = nullptr; 
+Rotary_Encoder song_select_1 = Rotary_Encoder(SS1_CLK_PIN, SS1_DT_PIN, SS1_SW_PIN);
 
 void setup() {
     Serial.begin(57600);
@@ -59,7 +61,7 @@ void setup() {
         .sample_rate = I2S_SAMPLE_RATE,
         .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT,
         .channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT,
-        .communication_format = I2S_COMM_FORMAT_I2S_MSB,
+        .communication_format = I2S_COMM_FORMAT_STAND_I2S,
         .intr_alloc_flags = 0,
         .dma_buf_count = 8,
         .dma_buf_len = 256,
@@ -79,18 +81,56 @@ void setup() {
     i2s_set_pin(I2S_NUM_0, &pin_config);
     i2s_set_sample_rates(I2S_NUM_0, I2S_SAMPLE_RATE);
 
-    // Creating channels
-    test_track = new Wav_File(tracklist[0]);
+    // Setup rotary encoder
+    song_select_1.init();
 
-    channel_1 = new Channel(tracklist, &tft, track_count);
-    channel_1->select_track(2);
-    channel_1->display_tracklist(100, 5);
+    // Creating channels
+    channel_1 = new Channel(tracklist, &tft, track_count, ACCENT_COLOR_1);
+    channel_1->select_track(0);
+    channel_1->playing = true;
+
+    // Display tracklist
+    display_tracklist(
+        &tft,
+        tracklist,
+        200, 
+        5, 
+        track_count, 
+        selected_track_ind,
+        channel_1->track_index
+    );
 }
 
 void loop() {
-    channel_1->display_waveform(0, 0, TFT_WIDTH, 100);
-    channel_1->playing = true;
+    int8_t ss1_delta = song_select_1.read_encoder();
+    bool selection_changed = false;
+
+    if (ss1_delta != 0) {
+        selected_track_ind += ss1_delta;
+        if (selected_track_ind >= track_count) { selected_track_ind = track_count - 1; }
+        if (selected_track_ind < 0) { selected_track_ind = 0; }
+
+        selection_changed = true;
+    }
+
+    if (song_select_1.read_button()) {
+        channel_1->select_track(selected_track_ind);
+        channel_1->playing = true;
+        selection_changed = true;
+    }
+
+    if (selection_changed) {
+        display_tracklist(
+            &tft,
+            tracklist,
+            200, 
+            5, 
+            track_count, 
+            selected_track_ind,
+            channel_1->track_index
+        );
+    }
+
     channel_1->update();
-    // int16_t sample = channel_1->cur_sample;
-    // Serial.printf("%d\n", sample);
+    // channel_1->display_waveform(0, 0, 200);
 }
