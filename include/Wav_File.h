@@ -22,45 +22,37 @@ struct WAV_HEADER {
     uint16_t  block_align;          // NumChannels * BitsPerSample/8
     uint16_t  bits_per_sample;      // Bits per sample (e.g. 16)
 
-    uint8_t   subchunk_2_ID[4];     // "data"
-    uint32_t  subchunk_2_size;      // Number of bytes of actual audio data
-};
-
-struct cache_struct {
-    off_t start_tag; // File offset of first byte of cached data (0 when file is opened).
-    off_t end_tag; // File offset one past the last byte of cached data (0 when file is opened).
-    off_t pos_tag; // `pos_tag`: Cache position: file offset of the cache.
-    uint8_t cbuf[WAV_CACHE_SZ]; // Cache is in bytes, not samples
+    uint8_t   data_ID[4];     // "data"
+    uint32_t  data_size;      // Number of bytes of actual audio data
 };
 
 class Wav_File {
     private:
     File wav_file;
     WAV_HEADER header;
-    cache_struct cache;
+
+    uint8_t* cache = nullptr;
+    size_t cache_pos = 0;   // how many bytes already consumed
+    size_t cache_len = 0;   // how many bytes remain valid
+
+    void refill_cache();
 
     public:
     uint16_t num_of_chan = 0;
     uint32_t sample_rate = 0;
     uint32_t data_size = 0;
+    uint32_t bits_per_sample = 0;
+    uint32_t data_start = 0;
     bool playing = false;
     bool is_empty = false;
-    uint64_t sample_index;
-    off_t get_cache_pos();
 
-    // Constructor
-    explicit Wav_File();
-    explicit Wav_File(const String& file_name);
+    Wav_File();
+    Wav_File(const String& file_name);
+    ~Wav_File();
 
-    // Methods
     void load(const String& file_name);
     void parse_header();
-    ssize_t read_samples(int16_t* buf, size_t sz = 1);
-    void seek_sample(uint32_t sample_pos);
-    int16_t* get_window(uint64_t cen_pos);
-    uint32_t get_position();
-    void empty_cache();
-    void fill_cache();
+    void read_frames(Frame_t *frames, size_t num_frames = 1);
 };
 
 #endif // WAV_FILE_H

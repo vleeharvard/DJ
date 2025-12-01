@@ -1,7 +1,8 @@
 #include <Arduino.h>
 #include <SD.h>
 #include <SPI.h>
-#include <TFT_eSPI.h>
+#include "driver/i2s.h"
+
 #include "Wav_File.h"
 
 #ifndef CHANNEL_FILE_H
@@ -10,29 +11,21 @@
 class Channel {
     private:
     String* tracklist;
-    Wav_File track;
-    TFT_eSPI* tft;
     uint16_t num_tracks;
-    uint16_t color;
 
-    int16_t i2s_buffer[I2S_BUF_FRAMES * 2]; // stereo interleaved
-    int buf_index = 0;                      // current fill position
+    TaskHandle_t i2s_writer_task_handle;
+    QueueHandle_t i2s_queue;
+    i2s_port_t i2s_port;
 
     public:
+    Wav_File* track;
     int32_t track_index;
-    int16_t cur_sample;
-    bool playing;
-    uint64_t total_samples_played = 0;
 
-    // Constructor
-    explicit Channel(String* tracklist, TFT_eSPI* tft, u_int16_t track_count, uint16_t color);
+    Channel(String* tracklist, u_int16_t track_count);
 
-    // Methods
-    void display_waveform(uint16_t x, uint16_t y, uint16_t height);
-    void display_tracklist(uint16_t y, uint16_t num_tracks_to_display);
     void select_track(int32_t track_num);
-    void update();
-    void fill_i2s_buf();
+    void start(i2s_port_t i2s_port, i2s_pin_config_t &i2s_pin_config);
+    friend void i2s_writer_task(void *param);
 };
 
 #endif // CHANNEL_FILE_H
