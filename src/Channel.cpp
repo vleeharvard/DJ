@@ -30,16 +30,16 @@ void i2s_writer_task(void *param) {
     Frame_t *frames = (Frame_t*)malloc(sizeof(Frame_t) * NUM_FRAMES_TO_SEND);
 
     while (true) {
-        output->track->read_frames(frames, NUM_FRAMES_TO_SEND);
+        size_t frames_read = output->track->read_frames(frames, NUM_FRAMES_TO_SEND);
 
         size_t bytes_written;
         i2s_write(output->i2s_port,
                   (const char*)frames,
-                  NUM_FRAMES_TO_SEND * sizeof(Frame_t),
+                  frames_read * sizeof(Frame_t),
                   &bytes_written,
                   portMAX_DELAY);
 
-        vTaskDelay(1);
+        taskYIELD();
     }
 }
 

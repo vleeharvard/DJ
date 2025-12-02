@@ -8,7 +8,7 @@
 #include <SD.h>
 #include "Utils.h"
 
-struct WAV_HEADER {
+struct wav_header_t {
     uint8_t   RIFF[4];              // Should be "RIFF"
     uint32_t  chunk_size;           // Overall file size minus 8 bytes
     uint8_t   WAVE[4];              // Shoould be "WAVE"
@@ -26,14 +26,18 @@ struct WAV_HEADER {
     uint32_t  data_size;      // Number of bytes of actual audio data
 };
 
+struct cache_t {
+    off_t start_tag; // File offset of first byte of cached data (0 when file is opened).
+    off_t end_tag; // File offset one past the last byte of cached data (0 when file is opened).
+    off_t pos_tag; // `pos_tag`: Cache position: file offset of the cache.
+    uint8_t cbuf[WAV_CACHE_SZ]; // Cache is in bytes, not samples
+};
+
 class Wav_File {
     private:
     File wav_file;
-    WAV_HEADER header;
-
-    uint8_t* cache = nullptr;
-    size_t cache_pos = 0;   // how many bytes already consumed
-    size_t cache_len = 0;   // how many bytes remain valid
+    wav_header_t header;
+    cache_t cache;
 
     void refill_cache();
 
@@ -52,7 +56,10 @@ class Wav_File {
 
     void load(const String& file_name);
     void parse_header();
-    void read_frames(Frame_t *frames, size_t num_frames = 1);
+    size_t read_frames(Frame_t *frames, size_t num_frames = 1);
+
+    void empty_cache();
+    void fill_cache();
 };
 
 #endif // WAV_FILE_H

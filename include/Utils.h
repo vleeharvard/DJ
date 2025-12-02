@@ -16,6 +16,12 @@
 #define I2S_BCLK_PIN 41
 #define I2S_LRC_PIN 40
 
+#define OLED_SCL 18 
+#define OLED_SDA 17
+#define OLED_RESET U8X8_PIN_NONE
+
+#define BATLVL 16
+
 // --- Audio ---
 typedef struct
 {
@@ -23,10 +29,10 @@ typedef struct
     int16_t right;
 } Frame_t;
 #define AUDIO_DIR "/"
-#define VOLUME (100E-2)
+#define VOLUME (50)
 #define DMA_BUF_COUNT 64
 #define DMA_BUF_LEN 1024
-#define WAV_CACHE_SIZE 8192 
+#define WAV_CACHE_SZ 4096
 
 #define NUM_FRAMES_TO_SEND 512
 
