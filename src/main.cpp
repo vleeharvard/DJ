@@ -5,50 +5,73 @@
 #include <U8g2lib.h>
 #include <Wire.h>
 
-// --- Custom libraries ---
 #include "Wav_File.h"
 #include "Channel.h"
 #include "Utils.h"
 #include "Touch_Sensor.h"
+#include "Touch_Wheel.h"
 
-// --- Constants ---
-#define MAX_SONGS 100
-#define TRACKS_DIR "/"
+uint16_t volume = 50;
 
-// --- Variables ---
-String tracklist[MAX_SONGS];
-uint16_t track_count = 0;
-size_t bytes_written;
+playlist_t* tracklist[10];
+uint16_t num_playlists;
+
+Touch_Wheel* touch_wheel;
+Touch_Sensor* touch_sensors[NUM_SENSORS];
+int8_t wheel_inc = 0;
+char swipe_dir = '\0';
+bool btn_pressed = false;
+
+int wheel_last = 0;
+int wheel_stable = 0;
+uint32_t wheel_time = 0;
+
+char swipe_last = '\0';
+char swipe_stable = '\0';
+uint32_t swipe_time = 0;
+
+bool btn_last = false;
+bool btn_stable = 0;
+uint32_t btn_time = 0;
+
 uint16_t selected_track_ind = 0;
 
 Channel* output;
-Touch_Sensor* touch1;
-Touch_Sensor* touch2;
-Touch_Sensor* touch3;
 U8G2_SSD1309_128X64_NONAME0_F_HW_I2C* u8g2;
+
+enum State_t { PLAYING, SONG_SELECT };
+State_t current_state = SONG_SELECT;
+uint16_t hovered_i = 0;
 
 void setup() {
     Serial.begin(57600);
     delay(1000);
     Serial.printf("\n\n\nStarting DJ Mixer...\n");
 
-    SPI.begin(SCK_PIN, MISO_PIN, MOSI_PIN); // Manually start
+    // Capacitive touch wheel
+    for (int i = 1; i <= 13; i++) {
+        if (i == 1) { // Button [1]
+            touch_sensors[i-1] = new Touch_Sensor(i, 30000, 60000);
+        } else if (i <= 9) { // Wheel [2, 9]
+            touch_sensors[i-1] = new Touch_Sensor(i, 20000, 70000);
+        } else { // Ring [10, 13]
+            touch_sensors[i-1] = new Touch_Sensor(i, 20000, 150000);
+        }
+        touch_sensors[i-1]->init();
+    }
+    touch_wheel = new Touch_Wheel(touch_sensors);
 
     // Read SD card and load tracks
     Serial.printf("Initializing SD card");
-
+    SPI.begin(SCK_PIN, MISO_PIN, MOSI_PIN);
     while (!SD.begin(SD_CS_PIN)) {
         Serial.printf(".");
     }
     Serial.printf("\n");
 
-    File tracks_dir = SD.open(TRACKS_DIR);
-    track_count = load_tracklist_from_file(tracks_dir, tracklist, MAX_SONGS);
-
-    Serial.printf("Found %d files:\n", track_count);
-    for (int i = 0; i < track_count; i++) {
-        Serial.printf("%d) %s\n", i, tracklist[i].c_str());
-    }
+    num_playlists = load_tracklist_from_sd(TRACKS_DIR, tracklist);
+    // print_tracklist(tracklist, num_playlists);
+    Serial.println(num_playlists);
 
     // Select I2S pins
     i2s_pin_config_t i2s_pin_config = {
@@ -58,43 +81,181 @@ void setup() {
         .data_in_num = I2S_PIN_NO_CHANGE
     };
 
-    // Creating channel
+    // Create channel
     Serial.println("Starting I2S Output");
-    output = new Channel(tracklist, track_count);
-    output->select_track(0);
+    output = new Channel(tracklist, num_playlists);
+    output->select_track(1, 0);
     output->start(I2S_NUM_1, i2s_pin_config);
 
-    // Creating touch
-    touch1 = new Touch_Sensor(1, 38000);
-    touch2 = new Touch_Sensor(2, 38000);
-    touch3 = new Touch_Sensor(3, 38000);
-
-    // Creating display
-    u8g2 = new U8G2_SSD1309_128X64_NONAME0_F_HW_I2C(U8G2_R0, OLED_RESET);
+    // Initialize display
+    u8g2 = new U8G2_SSD1309_128X64_NONAME0_F_HW_I2C(U8G2_R2, OLED_RESET);
     Wire.begin(OLED_SDA, OLED_SCL);
     delay(100);
     u8g2->begin();
 }
 
 void loop() {
-    // Nothing here since everything is handled by tasks
-    touch1->update();
-    touch2->update();
-    touch3->update();
+    // Audio streaming is handled by a task and runs asynchronously
 
-  char line[64];
+    playlist_t* cur_playlist = tracklist[
+        constrain(output->playlist_index, 0, num_playlists - 1)
+    ];
+    track_t* cur_track = cur_playlist->tracks[
+        constrain(output->track_index, 0, cur_playlist->num_songs - 1)
+    ];
 
-  snprintf(line, sizeof(line),
-          "T1:%s  T2:%s  T3:%s",
-          touch1->pressed() ? "ON" : "OFF",
-          touch2->pressed() ? "ON" : "OFF",
-          touch3->pressed() ? "ON" : "OFF");
+    // Touch wheel
+    wheel_inc = touch_wheel->wheel();
+    swipe_dir = touch_wheel->swipe();
+    btn_pressed = touch_wheel->button();
 
-  u8g2->firstPage();
-  do {
-    u8g2->setFont(u8g2_font_6x10_tf);
-    u8g2->drawStr(0, 12, line);
-  } while (u8g2->nextPage());
+    // Serial.printf("wheel_inc: %d swipe_dir %c btn_pressed: %d\n", wheel_inc, swipe_dir, btn_pressed);
 
-  delay(50);
+    // Display
+    u8g2->clearBuffer();
+
+    switch (current_state)
+    {
+    case PLAYING: {
+        // Song title
+        u8g2->setFont(u8g2_font_profont17_mr);
+        u8g2->drawStr(0, 20, cur_track->song.c_str());
+
+        // Song artist and playlist
+        u8g2->setFont(u8g2_font_smallsimple_tr);
+        u8g2->drawStr(0, 40, ("by " + cur_track->artist).c_str());
+        u8g2->drawStr(0, 50, ("in " + cur_playlist->name).c_str());
+        u8g2->drawStr(0, 60, (String(volume / 2) + " db").c_str());
+
+        // Icon
+        u8g2->setFont(u8g2_font_streamline_all_t);
+        char icon = 147;
+        u8g2->drawStr(108, 61, &icon);
+
+        // WAV statistics
+        u8g2->setFont(u8g2_font_tiny5_te);
+        u8g2->drawStr(90, 47, ".wav");
+        u8g2->drawStr(83, 54, (String(output->track->bits_per_sample) + " bits").c_str());
+        u8g2->drawStr(76, 61, (String(output->track->sample_rate ) + " hz").c_str());
+
+        // Pause indicator
+        if (output->paused) {
+            u8g2->setFont(u8g2_font_tiny5_te);
+            u8g2->drawStr(120, 8, "P");
+        }
+
+        hovered_i = 0;
+
+        volume = constrain(volume + wheel_inc, 0, 100);
+        switch (swipe_dir)
+        {
+        case 'U':
+            current_state = SONG_SELECT;
+            break;
+        
+        case 'L':
+            output->track_index = constrain(output->track_index - 1, 0, cur_playlist->num_songs);
+            output->select_track(output->playlist_index, output->track_index);
+            break;
+
+        case 'R':
+            output->track_index = constrain(output->track_index + 1, 0, cur_playlist->num_songs);
+            output->select_track(output->playlist_index, output->track_index);
+            break;
+
+        case 'D':
+            current_state = SONG_SELECT;
+            break;
+        }
+
+        if (btn_pressed) {
+            output->paused = !output->paused;
+        }
+
+        break;
+    }
+           
+    case SONG_SELECT: {
+        u8g2->setFont(u8g2_font_smallsimple_tr);
+        u8g2->drawStr(10, 10, cur_playlist->name.c_str());
+
+        int16_t half_window_sz = SS_NUM_DISPLAYED_TRACKS / 2;
+        int16_t start_i = 0;
+
+        hovered_i = constrain(hovered_i, 0, cur_playlist->num_songs - 1);
+
+        if (hovered_i > half_window_sz) {
+            start_i = hovered_i - half_window_sz;
+        }
+
+        if (start_i + SS_NUM_DISPLAYED_TRACKS > cur_playlist->num_songs) {
+            start_i = max(0, cur_playlist->num_songs - SS_NUM_DISPLAYED_TRACKS);
+        }
+
+        u8g2->setFont(u8g2_font_tiny5_te);
+
+        for (uint16_t i = 0; 
+            i < SS_NUM_DISPLAYED_TRACKS && 
+            (start_i + i) < cur_playlist->num_songs; 
+            i++) 
+        {
+            uint16_t y_pos = (i + 1) * 10 + 10;
+
+            track_t* t = cur_playlist->tracks[start_i + i];
+            String label = t->artist + " - " + t->song;
+
+            u8g2->drawStr(10, y_pos, label.c_str());
+
+            if (start_i + i == hovered_i) {
+                u8g2->drawStr(0, y_pos, ">");
+            }
+        }
+
+        hovered_i = constrain(hovered_i + wheel_inc, 0, cur_playlist->num_songs);
+
+        switch (swipe_dir)
+        {
+        case 'U':
+            current_state = PLAYING;
+            break;
+        
+        case 'L':
+            output->playlist_index = constrain(output->playlist_index - 1, 0, num_playlists);
+            hovered_i = 0;
+            break;
+
+        case 'R':
+            output->playlist_index = constrain(output->playlist_index + 1, 0, num_playlists);
+            hovered_i = 0;
+            break;
+
+        case 'D':
+            current_state = PLAYING;
+            break;
+        }
+
+        if (btn_pressed) {
+            output->select_track(output->playlist_index, hovered_i);
+            current_state = PLAYING;
+        }
+
+        break;
+    }  
+    }
+
+    u8g2->sendBuffer();
 }
+
+// Cool fonts
+// u8g2->setFont(u8g2_font_Pixellari_te);
+// u8g2->setFont(u8g2_font_chargen_92_me);
+// u8g2->setFont(u8g2_font_commodore64_tr);
+// u8g2->setFont(u8g2_font_crox4hb_tr);
+// u8g2->setFont(u8g2_font_maniac_te);
+// u8g2->setFont(u8g2_font_pixzillav1_tf);
+
+
+// u8g2->setFont(u8g2_font_5x8_mf);
+// u8g2->setFont(u8g2_font_crox1h_tr);
+// u8g2->setFont(u8g2_font_ordinarybasis_tr);
+// u8g2->setFont(u8g2_font_nine_by_five_nbp_t_all);

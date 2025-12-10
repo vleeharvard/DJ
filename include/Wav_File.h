@@ -24,7 +24,7 @@ struct wav_header_t {
 
     uint8_t   data_ID[4];     // "data"
     uint32_t  data_size;      // Number of bytes of actual audio data
-};
+} __attribute__((packed));
 
 struct cache_t {
     off_t start_tag; // File offset of first byte of cached data (0 when file is opened).

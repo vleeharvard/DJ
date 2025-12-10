@@ -1,19 +1,19 @@
 #include <Arduino.h>
 #include "Touch_Sensor.h"
 
-Touch_Sensor::Touch_Sensor(int pin, uint16_t sensitivity) {
+Touch_Sensor::Touch_Sensor(int pin, uint32_t lower, uint32_t upper) {
     this->pin = pin;
-    this->sens = sensitivity;
+    this->lower = lower;
+    this->upper = upper;
 }
 
 void Touch_Sensor::init() {
-    baseline = touchRead(pin);
     state = false;
 }
 
-uint16_t Touch_Sensor::update() {
-    uint16_t reading = touchRead(pin);
-    state = (reading > sens);
+uint32_t Touch_Sensor::update() {
+    uint32_t reading = touchRead(pin);
+    state = (reading < lower || reading > upper);
 
     return reading;
 }

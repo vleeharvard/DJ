@@ -7,7 +7,8 @@ Wav_File::Wav_File() {
 }
 
 void Wav_File::load(const String& file_name) {
-    wav_file = SD.open(AUDIO_DIR + file_name);
+    if (wav_file) { wav_file.close(); }
+    wav_file = SD.open(file_name);
     if (!wav_file) {
         is_empty = true;
         assert(0);
@@ -18,11 +19,11 @@ void Wav_File::load(const String& file_name) {
 }
 
 Wav_File::Wav_File(const String& file_name) {
+    wav_file.close();
     load(file_name);
 }
 
-Wav_File::~Wav_File()
-{
+Wav_File::~Wav_File() {
     wav_file.close();
 }
 
@@ -62,7 +63,7 @@ size_t Wav_File::read_frames(Frame_t *frames, size_t num_frames) {
 
         uint8_t low = cache.cbuf[cache.pos_tag - cache.start_tag];
         uint8_t high = cache.cbuf[cache.pos_tag - cache.start_tag + 1];
-        frames[i].left = (int16_t)(high << 8 | low);
+        frames[i].left = (int16_t)(high << 8 | low) * (constrain(0, volume, 100) / 100.0f);
         cache.pos_tag += 2;
 
         if (num_of_chan == 1) {
@@ -70,7 +71,7 @@ size_t Wav_File::read_frames(Frame_t *frames, size_t num_frames) {
         } else {
             low = cache.cbuf[cache.pos_tag - cache.start_tag];
             high = cache.cbuf[cache.pos_tag - cache.start_tag + 1];
-            frames[i].right = (int16_t)(high << 8 | low);
+            frames[i].right = (int16_t)(high << 8 | low) * (constrain(0, volume, 100) / 100.0f);
             cache.pos_tag += 2;
         }
         frames_read += 1;
@@ -86,10 +87,6 @@ void Wav_File::empty_cache() {
 void Wav_File::fill_cache() {
     cache.start_tag = cache.end_tag;
     ssize_t n = wav_file.read(cache.cbuf, WAV_CACHE_SZ);
-
-    if (n <= 0) {
-        assert(0);
-    }
     
     cache.end_tag = cache.start_tag + n;
     cache.pos_tag = cache.start_tag;

@@ -6,17 +6,17 @@
 class Touch_Sensor {
     private:
     uint8_t pin;
-    uint16_t sens;
+    uint32_t lower;
+    uint32_t upper;
 
-    float baseline = 0;
     bool state = false; // Instantaneous state
 
     public:
-    explicit Touch_Sensor(int pin, uint16_t sensitivity);
+    explicit Touch_Sensor(int pin, uint32_t lower, uint32_t upper);
     void init();
-    uint16_t update();
+    uint32_t update();
     bool pressed();
     bool released();
 };
 
-#endif // CHANNEL_FILE_H
+#endif // TOUCH_SENSOR_H

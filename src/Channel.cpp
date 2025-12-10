@@ -7,18 +7,22 @@
 #include "Utils.h"
 #include "driver/i2s.h"
 
-Channel::Channel(String* tracklist, uint16_t track_count) {
+Channel::Channel(playlist_t** tracklist, uint16_t num_playlists) {
     this->tracklist = tracklist; // Passed by pointer
+    this->num_playlists = num_playlists;
+    
     this->track = new Wav_File();
+
     this->track_index = -1;
-    this->num_tracks = track_count;
+    this->playlist_index = -1;
+    this->paused = true;
 }
 
-void Channel::select_track(int32_t track_num) {
-    track_index = track_num;
-    track_index = max(track_index, 0);
-    track_index = min(track_index, num_tracks - 1);
-    track->load(tracklist[track_index]);
+void Channel::select_track(int32_t playlist_i, int32_t track_i) {
+    playlist_index = constrain(playlist_i, 0, num_playlists - 1);
+    track_index = constrain(track_i, 0, tracklist[playlist_index]->num_songs);
+
+    track->load(tracklist[playlist_index]->tracks[track_index]->filepath);
 
     if (!track->is_empty) {
     }
@@ -30,7 +34,28 @@ void i2s_writer_task(void *param) {
     Frame_t *frames = (Frame_t*)malloc(sizeof(Frame_t) * NUM_FRAMES_TO_SEND);
 
     while (true) {
+
+        if (output->paused) {
+            vTaskDelay(5);
+            continue;
+        }
+
         size_t frames_read = output->track->read_frames(frames, NUM_FRAMES_TO_SEND);
+
+        if (frames_read == 0) { // END OF SONG
+            playlist_t *cur_playlist = output->tracklist[output->playlist_index];
+
+            if (output->track_index >= cur_playlist->num_songs) {
+                output->paused = true;
+                output->track_index = 0;
+                vTaskDelay(1);
+                continue;
+            }
+
+            output->track_index = constrain(output->track_index + 1, 0, cur_playlist->num_songs);
+            output->select_track(output->playlist_index, output->track_index);
+            continue;
+        }
 
         size_t bytes_written;
         i2s_write(output->i2s_port,
@@ -39,7 +64,7 @@ void i2s_writer_task(void *param) {
                   &bytes_written,
                   portMAX_DELAY);
 
-        taskYIELD();
+        vTaskDelay(1);
     }
 }
 

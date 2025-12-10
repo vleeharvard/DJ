@@ -2,79 +2,88 @@
 #include <SD.h>
 #include <Utils.h>
 
-uint16_t load_tracklist_from_file(File directory, String* tracklist, uint32_t max_songs) {
-    uint16_t track_count = 0;
-    while (true) {
-    File entry = directory.openNextFile();
-    if (!entry) { break; }
-    if (!entry.isDirectory()) {
-        String track_name = String(entry.name());
-        String track_name_lower = track_name;
-        track_name_lower.toLowerCase();
-        if (track_name_lower.endsWith(".wav") && track_count < max_songs) {
-            tracklist[track_count++] = String(entry.name());
-        }
-    }
-    entry.close();
-    }
-    return track_count;
+void generate_track(String dir, String track_name, track_t* track) {
+    int semicolon_index = track_name.indexOf(';');
+    track->artist = track_name.substring(0, semicolon_index);
+    track->artist.replace("_", " ");
+    track->song = track_name.substring(semicolon_index + 1, track_name.length() - 4);
+    track->song.replace("_", " ");
+    track->filepath = dir + "/" + track_name;
 }
 
-// void display_tracklist(
-//     TFT_eSPI* tft,
-//     String* tracklist,
-//     uint16_t y, 
-//     uint16_t num_tracks_to_display, 
-//     uint16_t num_tracks, 
-//     uint16_t hovered_track_ind,
-//     uint16_t channel_1_ind
-// ) {
-//     if (num_tracks == 0) { return; }
+playlist_t* load_playlist_from_dir(String filepath) {
+    File dir = SD.open(filepath);
+    playlist_t* playlist = new playlist_t; 
+    
+    uint16_t track_count = 0;
+    while (true) {
+        File track_entry = dir.openNextFile();
 
-//     int16_t half_window = num_tracks_to_display / 2;
-//     int16_t start_index = 0;
-//     if (hovered_track_ind > half_window) {
-//         start_index = hovered_track_ind - half_window;
-//     }
+        if (!track_entry) { break; }
 
-//     if (start_index + num_tracks_to_display > num_tracks) {
-//         start_index = max(0, num_tracks - num_tracks_to_display);
-//     }
+        String track_name = String(track_entry.name());
+        if (track_name.endsWith(".wav") && track_count < MAX_SONGS_PER_PLAYLIST) {
+            track_t* track = new track_t;
+            generate_track(filepath, track_name, track);
+            playlist->tracks[track_count++] = track;
+        }
+    }
 
-//     tft->fillRect(0, y, TFT_WIDTH, num_tracks_to_display * (LINE_HEIGHT + TEXT_PADDING * 2), BACKGROUND_COLOR);
+    playlist->name = String(dir.name());
+    playlist->name.replace("_", " ");
+    playlist->num_songs = track_count;
+    return playlist;
+}
 
-//     for (uint16_t i = 0; i < num_tracks_to_display && (start_index + i) < num_tracks; i++) {
-//         uint16_t track_num = start_index + i;
-//         uint16_t track_y = y + i * (LINE_HEIGHT + TEXT_PADDING * 2);
+uint16_t load_tracklist_from_sd(String root_filepath, playlist_t** tracklist) {
+    File dir = SD.open(root_filepath);
+    uint16_t num_playlists = 0;
 
-//         bool is_selected = (track_num == hovered_track_ind);
-//         bool channel_1_now_playing = (track_num == channel_1_ind);
+    playlist_t* playlistless_playlist = new playlist_t;
+    playlistless_playlist->name = "No Playlist";
+    playlistless_playlist->num_songs = 0;
+    tracklist[num_playlists++] = playlistless_playlist;
 
-//         if (is_selected) {
-//             tft->fillRoundRect(
-//                 0,
-//                 track_y,
-//                 TFT_WIDTH,
-//                 LINE_HEIGHT + 2 * TEXT_PADDING,
-//                 BORDER_RADIUS,
-//                 PRIMARY_COLOR
-//             );
-//             tft->setTextColor(BACKGROUND_COLOR, PRIMARY_COLOR);
-//         } else if (channel_1_now_playing) {
-//             tft->fillRoundRect(
-//                 0,
-//                 track_y,
-//                 TFT_WIDTH,
-//                 LINE_HEIGHT + 2 * TEXT_PADDING,
-//                 BORDER_RADIUS,
-//                 ACCENT_COLOR_1
-//             );
-//             tft->setTextColor(BACKGROUND_COLOR, ACCENT_COLOR_1);
-//         } else {
-//             tft->setTextColor(PRIMARY_COLOR, BACKGROUND_COLOR);
-//         }
+    while (true) {
+        File entry = dir.openNextFile();
+        if (!entry) { break; }
 
-//         tft->drawString(tracklist[track_num], TEXT_PADDING, track_y + LINE_HEIGHT / 2);
-//     }
-// }
+        if (entry.isDirectory() && num_playlists <= MAX_PLAYLISTS) {
+            tracklist[num_playlists++] = load_playlist_from_dir(root_filepath + String(entry.name()));
+        } else { // Entry is a just a playlist-less song, put it in the filler playlist
 
+            if (String(entry.name()).endsWith(".wav") && playlistless_playlist->num_songs < MAX_SONGS_PER_PLAYLIST) {
+                track_t* general_track = new track_t;
+                generate_track("", String(entry.name()), general_track);
+                playlistless_playlist->tracks[playlistless_playlist->num_songs++] = general_track;
+            }
+
+        }
+        entry.close();
+    }
+
+    return num_playlists;
+}
+
+void print_tracklist(playlist_t* tracklist[], int num_playlists) {
+    for (int i = 0; i < num_playlists; i++) {
+        playlist_t* pl = tracklist[i];
+        if (pl == nullptr) continue; // skip empty entries
+
+        Serial.printf("playlist %d: %s\n", i + 1, pl->name.c_str());
+
+        for (int j = 0; j < pl->num_songs; j++) {
+            track_t* t = pl->tracks[j];
+            if (t == nullptr) continue; // skip empty song slots
+
+            Serial.printf("%d) %s, %s, %s\n",
+                j + 1,
+                t->artist.c_str(),
+                t->song.c_str(),
+                t->filepath.c_str()
+            );
+        }
+
+        Serial.println();  // blank line between playlists
+    }
+}
