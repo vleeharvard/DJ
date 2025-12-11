@@ -20,7 +20,7 @@ Channel::Channel(playlist_t** tracklist, uint16_t num_playlists) {
 
 void Channel::select_track(int32_t playlist_i, int32_t track_i) {
     playlist_index = constrain(playlist_i, 0, num_playlists - 1);
-    track_index = constrain(track_i, 0, tracklist[playlist_index]->num_songs);
+    track_index = constrain(track_i, 0, tracklist[playlist_index]->num_songs - 1); // TO DO: CHECK FOR -1
 
     track->load(tracklist[playlist_index]->tracks[track_index]->filepath);
 
@@ -52,7 +52,7 @@ void i2s_writer_task(void *param) {
                 continue;
             }
 
-            output->track_index = constrain(output->track_index + 1, 0, cur_playlist->num_songs);
+            output->track_index = constrain(output->track_index + 1, 0, cur_playlist->num_songs - 1);
             output->select_track(output->playlist_index, output->track_index);
             continue;
         }

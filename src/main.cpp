@@ -22,17 +22,8 @@ int8_t wheel_inc = 0;
 char swipe_dir = '\0';
 bool btn_pressed = false;
 
-int wheel_last = 0;
-int wheel_stable = 0;
-uint32_t wheel_time = 0;
-
-char swipe_last = '\0';
-char swipe_stable = '\0';
-uint32_t swipe_time = 0;
-
 bool btn_last = false;
-bool btn_stable = 0;
-uint32_t btn_time = 0;
+uint32_t btn_time = false;
 
 uint16_t selected_track_ind = 0;
 
@@ -154,12 +145,12 @@ void loop() {
             break;
         
         case 'L':
-            output->track_index = constrain(output->track_index - 1, 0, cur_playlist->num_songs);
+            output->track_index = constrain(output->track_index - 1, 0, cur_playlist->num_songs - 1);
             output->select_track(output->playlist_index, output->track_index);
             break;
 
         case 'R':
-            output->track_index = constrain(output->track_index + 1, 0, cur_playlist->num_songs);
+            output->track_index = constrain(output->track_index + 1, 0, cur_playlist->num_songs - 1);
             output->select_track(output->playlist_index, output->track_index);
             break;
 
@@ -168,8 +159,15 @@ void loop() {
             break;
         }
 
-        if (btn_pressed) {
-            output->paused = !output->paused;
+        // Debounce pausing
+        uint32_t now = millis();
+        if (btn_pressed != btn_last && (now - btn_time) > BTN_DEBOUNCE) {
+            btn_last = btn_pressed;
+            btn_time = now;
+
+            if (btn_pressed) {
+                output->paused = !output->paused;
+            }
         }
 
         break;
@@ -211,7 +209,7 @@ void loop() {
             }
         }
 
-        hovered_i = constrain(hovered_i + wheel_inc, 0, cur_playlist->num_songs);
+        hovered_i = constrain(hovered_i + wheel_inc, 0, cur_playlist->num_songs - 1);
 
         switch (swipe_dir)
         {
@@ -220,12 +218,12 @@ void loop() {
             break;
         
         case 'L':
-            output->playlist_index = constrain(output->playlist_index - 1, 0, num_playlists);
+            output->playlist_index = constrain(output->playlist_index - 1, 0, num_playlists - 1);
             hovered_i = 0;
             break;
 
         case 'R':
-            output->playlist_index = constrain(output->playlist_index + 1, 0, num_playlists);
+            output->playlist_index = constrain(output->playlist_index + 1, 0, num_playlists - 1);
             hovered_i = 0;
             break;
 

@@ -28,15 +28,13 @@ struct playlist_t {
 uint16_t load_tracklist_from_sd(String root_filepath, playlist_t** tracklist);
 void print_tracklist(playlist_t* tracklist[], int num_playlists);
 
-int debounce_int(int reading, int &last_reading, int &stable_value, uint32_t &last_change, uint32_t delay_ms);
-char debounce_char(char reading, char &last_reading, char &stable_value, uint32_t &last_change, uint32_t delay_ms);
-bool debounce_bool(bool reading, bool &last_reading, bool &stable_value, uint32_t &last_change, uint32_t delay_ms);
-
 // Touch sensors
 #define NUM_SENSORS 13
-#define STORE_MS 50 // How long to store wheel state
+#define STORE_MS 70 // How long to store wheel state
 #define HOLD_MS 300 // How long to register button press
 #define SWIPE_MS 300 // How long to register button swipe
+
+#define BTN_DEBOUNCE 50
 
 // --- Pins ---
 #define SD_CS_PIN 39

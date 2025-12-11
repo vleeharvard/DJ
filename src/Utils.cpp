@@ -48,7 +48,7 @@ uint16_t load_tracklist_from_sd(String root_filepath, playlist_t** tracklist) {
         File entry = dir.openNextFile();
         if (!entry) { break; }
 
-        if (entry.isDirectory() && num_playlists <= MAX_PLAYLISTS) {
+        if (entry.isDirectory() && num_playlists <= MAX_PLAYLISTS && !String(entry.name()).startsWith(".")) {
             tracklist[num_playlists++] = load_playlist_from_dir(root_filepath + String(entry.name()));
         } else { // Entry is a just a playlist-less song, put it in the filler playlist
 
