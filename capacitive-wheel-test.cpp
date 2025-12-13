@@ -25,6 +25,7 @@ int counter = 0;
 String swipe = "";
 
 void setup() {
+    delay(1000);
     Serial.begin(57600);
     Serial.printf("\n\n\nStarting Capacitive Wheel...\n");
 

@@ -31,10 +31,11 @@ void print_tracklist(playlist_t* tracklist[], int num_playlists);
 // Touch sensors
 #define NUM_SENSORS 13
 #define STORE_MS 70 // How long to store wheel state
-#define HOLD_MS 300 // How long to register button press
-#define SWIPE_MS 300 // How long to register button swipe
+#define HOLD_MS 200 // How long to register button press
+#define SWIPE_MS 200 // How long to register button swipe
 
 #define BTN_DEBOUNCE 50
+#define SWP_DEBOUNCE 50
 
 // --- Pins ---
 #define SD_CS_PIN 39

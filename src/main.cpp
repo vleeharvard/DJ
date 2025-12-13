@@ -23,7 +23,10 @@ char swipe_dir = '\0';
 bool btn_pressed = false;
 
 bool btn_last = false;
-uint32_t btn_time = false;
+uint32_t btn_time = 0;
+
+char swipe_last = '\0';
+uint32_t swipe_time = 0;
 
 uint16_t selected_track_ind = 0;
 
@@ -42,11 +45,11 @@ void setup() {
     // Capacitive touch wheel
     for (int i = 1; i <= 13; i++) {
         if (i == 1) { // Button [1]
-            touch_sensors[i-1] = new Touch_Sensor(i, 30000, 60000);
+            touch_sensors[i-1] = new Touch_Sensor(i, 10000, 60000);
         } else if (i <= 9) { // Wheel [2, 9]
-            touch_sensors[i-1] = new Touch_Sensor(i, 20000, 70000);
+            touch_sensors[i-1] = new Touch_Sensor(i, 10000, 30000);
         } else { // Ring [10, 13]
-            touch_sensors[i-1] = new Touch_Sensor(i, 20000, 150000);
+            touch_sensors[i-1] = new Touch_Sensor(i, 10000, 50000);
         }
         touch_sensors[i-1]->init();
     }
@@ -88,6 +91,8 @@ void setup() {
 void loop() {
     // Audio streaming is handled by a task and runs asynchronously
 
+    uint32_t now = millis();
+
     playlist_t* cur_playlist = tracklist[
         constrain(output->playlist_index, 0, num_playlists - 1)
     ];
@@ -99,8 +104,6 @@ void loop() {
     wheel_inc = touch_wheel->wheel();
     swipe_dir = touch_wheel->swipe();
     btn_pressed = touch_wheel->button();
-
-    // Serial.printf("wheel_inc: %d swipe_dir %c btn_pressed: %d\n", wheel_inc, swipe_dir, btn_pressed);
 
     // Display
     u8g2->clearBuffer();
@@ -138,29 +141,36 @@ void loop() {
         hovered_i = 0;
 
         volume = constrain(volume + wheel_inc, 0, 100);
-        switch (swipe_dir)
-        {
-        case 'U':
-            current_state = SONG_SELECT;
-            break;
-        
-        case 'L':
-            output->track_index = constrain(output->track_index - 1, 0, cur_playlist->num_songs - 1);
-            output->select_track(output->playlist_index, output->track_index);
-            break;
 
-        case 'R':
-            output->track_index = constrain(output->track_index + 1, 0, cur_playlist->num_songs - 1);
-            output->select_track(output->playlist_index, output->track_index);
-            break;
+        // Next/Prev Song
+        if (swipe_dir != swipe_last && (now - swipe_time) > SWP_DEBOUNCE) {
+            swipe_last = swipe_dir;
+            swipe_time = now;
 
-        case 'D':
-            current_state = SONG_SELECT;
-            break;
+            switch (swipe_dir)
+            {
+            case 'U':
+                current_state = SONG_SELECT;
+                break;
+            
+            case 'L':
+                output->track_index = constrain(output->track_index - 1, 0, cur_playlist->num_songs - 1);
+                output->select_track(output->playlist_index, output->track_index);
+                break;
+
+            case 'R':
+                output->track_index = constrain(output->track_index + 1, 0, cur_playlist->num_songs - 1);
+                output->select_track(output->playlist_index, output->track_index);
+                break;
+
+            case 'D':
+                current_state = SONG_SELECT;
+                break;
+            }
         }
 
-        // Debounce pausing
-        uint32_t now = millis();
+
+        // Pause
         if (btn_pressed != btn_last && (now - btn_time) > BTN_DEBOUNCE) {
             btn_last = btn_pressed;
             btn_time = now;
@@ -169,6 +179,8 @@ void loop() {
                 output->paused = !output->paused;
             }
         }
+
+        // Battery level;
 
         break;
     }
@@ -180,7 +192,7 @@ void loop() {
         int16_t half_window_sz = SS_NUM_DISPLAYED_TRACKS / 2;
         int16_t start_i = 0;
 
-        hovered_i = constrain(hovered_i, 0, cur_playlist->num_songs - 1);
+        hovered_i = constrain(hovered_i + wheel_inc, 0, cur_playlist->num_songs - 1);
 
         if (hovered_i > half_window_sz) {
             start_i = hovered_i - half_window_sz;
@@ -209,32 +221,43 @@ void loop() {
             }
         }
 
-        hovered_i = constrain(hovered_i + wheel_inc, 0, cur_playlist->num_songs - 1);
+        // Switch playlist
+        if (swipe_dir != swipe_last && (now - swipe_time) > SWP_DEBOUNCE) {
+            swipe_last = swipe_dir;
+            swipe_time = now;
 
-        switch (swipe_dir)
-        {
-        case 'U':
-            current_state = PLAYING;
-            break;
-        
-        case 'L':
-            output->playlist_index = constrain(output->playlist_index - 1, 0, num_playlists - 1);
-            hovered_i = 0;
-            break;
+            switch (swipe_dir)
+            {
+            case 'U':
+                current_state = PLAYING;
+                break;
+            
+            case 'L':
+                output->playlist_index = constrain(output->playlist_index - 1, 0, num_playlists - 1);
+                hovered_i = 0;
+                break;
 
-        case 'R':
-            output->playlist_index = constrain(output->playlist_index + 1, 0, num_playlists - 1);
-            hovered_i = 0;
-            break;
+            case 'R':
+                output->playlist_index = constrain(output->playlist_index + 1, 0, num_playlists - 1);
+                hovered_i = 0;
+                break;
 
-        case 'D':
-            current_state = PLAYING;
-            break;
+            case 'D':
+                current_state = PLAYING;
+                break;
+            }
         }
 
-        if (btn_pressed) {
-            output->select_track(output->playlist_index, hovered_i);
-            current_state = PLAYING;
+        // Select song
+        if (btn_pressed != btn_last && (now - btn_time) > BTN_DEBOUNCE) {
+            btn_last = btn_pressed;
+            btn_time = now;
+
+            if (btn_pressed) {
+                output->select_track(output->playlist_index, hovered_i);
+                output->paused = false;
+                current_state = PLAYING;
+            }
         }
 
         break;
