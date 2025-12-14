@@ -87,3 +87,12 @@ void print_tracklist(playlist_t* tracklist[], int num_playlists) {
         Serial.println();  // blank line between playlists
     }
 }
+
+uint16_t get_battery(uint8_t pin) {
+    float voltage = (analogRead(pin) * (3.3f / 4095.0f)) * 1.2f;
+    Serial.println(voltage);
+    if (voltage <= V_MIN) return 0;
+    if (voltage >= V_MAX) return 100;
+
+    return (int) (((voltage - V_MIN) / (V_MAX - V_MIN)) * 100);
+}

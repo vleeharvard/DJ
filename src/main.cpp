@@ -65,7 +65,7 @@ void setup() {
 
     num_playlists = load_tracklist_from_sd(TRACKS_DIR, tracklist);
     // print_tracklist(tracklist, num_playlists);
-    Serial.println(num_playlists);
+    Serial.printf("Num playlists: %d\n", num_playlists);
 
     // Select I2S pins
     i2s_pin_config_t i2s_pin_config = {
@@ -82,8 +82,8 @@ void setup() {
     output->start(I2S_NUM_1, i2s_pin_config);
 
     // Initialize display
-    u8g2 = new U8G2_SSD1309_128X64_NONAME0_F_HW_I2C(U8G2_R2, OLED_RESET);
-    Wire.begin(OLED_SDA, OLED_SCL);
+    u8g2 = new U8G2_SSD1309_128X64_NONAME0_F_HW_I2C(U8G2_R2, OLED_RESET_PIN);
+    Wire.begin(OLED_SDA_PIN, OLED_SCL_PIN);
     delay(100);
     u8g2->begin();
 }
@@ -132,10 +132,14 @@ void loop() {
         u8g2->drawStr(83, 54, (String(output->track->bits_per_sample) + " bits").c_str());
         u8g2->drawStr(76, 61, (String(output->track->sample_rate ) + " hz").c_str());
 
+        // Battery level;
+        u8g2->setFont(u8g2_font_tiny5_te);
+        u8g2->drawStr(110, 8, (String(get_battery(BAT_LVL_PIN)) + "%").c_str());
+
         // Pause indicator
         if (output->paused) {
             u8g2->setFont(u8g2_font_tiny5_te);
-            u8g2->drawStr(120, 8, "P");
+            u8g2->drawStr(49, 30, "PAUSED");
         }
 
         hovered_i = 0;
@@ -143,7 +147,7 @@ void loop() {
         volume = constrain(volume + wheel_inc, 0, 100);
 
         // Next/Prev Song
-        if (swipe_dir != swipe_last && (now - swipe_time) > SWP_DEBOUNCE) {
+        if (swipe_dir != swipe_last && (now - swipe_time) > SWP_DEBOUNCE && wheel_inc == 0) {
             swipe_last = swipe_dir;
             swipe_time = now;
 
@@ -178,19 +182,44 @@ void loop() {
             if (btn_pressed) {
                 output->paused = !output->paused;
             }
-        }
-
-        // Battery level;
+        }        
 
         break;
     }
            
     case SONG_SELECT: {
-        u8g2->setFont(u8g2_font_smallsimple_tr);
-        u8g2->drawStr(10, 10, cur_playlist->name.c_str());
-
         int16_t half_window_sz = SS_NUM_DISPLAYED_TRACKS / 2;
         int16_t start_i = 0;
+
+        // Switch playlist
+        if (swipe_dir != swipe_last && (now - swipe_time) > SWP_DEBOUNCE  && wheel_inc == 0) {
+            swipe_last = swipe_dir;
+            swipe_time = now;
+
+            switch (swipe_dir)
+            {
+            case 'U':
+                current_state = PLAYING;
+                break;
+            
+            case 'L':
+                output->playlist_index = constrain(output->playlist_index - 1, 0, num_playlists - 1);
+                hovered_i = 0;
+                break;
+
+            case 'R':
+                output->playlist_index = constrain(output->playlist_index + 1, 0, num_playlists - 1);
+                hovered_i = 0;
+                break;
+
+            case 'D':
+                current_state = PLAYING;
+                break;
+            }
+        }
+
+        u8g2->setFont(u8g2_font_smallsimple_tr);
+        u8g2->drawStr(1, 10, (String(output->playlist_index) + ". " + cur_playlist->name).c_str());
 
         hovered_i = constrain(hovered_i + wheel_inc, 0, cur_playlist->num_songs - 1);
 
@@ -221,35 +250,8 @@ void loop() {
             }
         }
 
-        // Switch playlist
-        if (swipe_dir != swipe_last && (now - swipe_time) > SWP_DEBOUNCE) {
-            swipe_last = swipe_dir;
-            swipe_time = now;
-
-            switch (swipe_dir)
-            {
-            case 'U':
-                current_state = PLAYING;
-                break;
-            
-            case 'L':
-                output->playlist_index = constrain(output->playlist_index - 1, 0, num_playlists - 1);
-                hovered_i = 0;
-                break;
-
-            case 'R':
-                output->playlist_index = constrain(output->playlist_index + 1, 0, num_playlists - 1);
-                hovered_i = 0;
-                break;
-
-            case 'D':
-                current_state = PLAYING;
-                break;
-            }
-        }
-
         // Select song
-        if (btn_pressed != btn_last && (now - btn_time) > BTN_DEBOUNCE) {
+        if (btn_pressed != btn_last && (now - btn_time) > BTN_DEBOUNCE && wheel_inc == 0 && swipe_dir == '\0') {
             btn_last = btn_pressed;
             btn_time = now;
 
@@ -257,6 +259,7 @@ void loop() {
                 output->select_track(output->playlist_index, hovered_i);
                 output->paused = false;
                 current_state = PLAYING;
+                return;
             }
         }
 

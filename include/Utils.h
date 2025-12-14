@@ -27,8 +27,9 @@ struct playlist_t {
 
 uint16_t load_tracklist_from_sd(String root_filepath, playlist_t** tracklist);
 void print_tracklist(playlist_t* tracklist[], int num_playlists);
+uint16_t get_battery(uint8_t pin);
 
-// Touch sensors
+// --- Touch sensors ---
 #define NUM_SENSORS 13
 #define STORE_MS 70 // How long to store wheel state
 #define HOLD_MS 200 // How long to register button press
@@ -47,11 +48,15 @@ void print_tracklist(playlist_t* tracklist[], int num_playlists);
 #define I2S_BCLK_PIN 41
 #define I2S_LRC_PIN 42
 
-#define OLED_SCL 18 
-#define OLED_SDA 17
-#define OLED_RESET U8X8_PIN_NONE
+#define OLED_SCL_PIN 18 
+#define OLED_SDA_PIN 17
+#define OLED_RESET_PIN U8X8_PIN_NONE
 
-#define BATLVL 16
+#define BAT_LVL_PIN 16
+
+// --- Battery ---
+#define V_MAX 3.96
+#define V_MIN 3.5
 
 // --- Audio ---
 typedef struct
@@ -63,7 +68,7 @@ typedef struct
 #define DMA_BUF_LEN 1024
 #define WAV_CACHE_SZ 4096
 
-#define NUM_FRAMES_TO_SEND 1024
+#define NUM_FRAMES_TO_SEND 512
 
 // --- User Interface ---
 
