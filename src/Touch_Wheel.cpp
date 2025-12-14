@@ -26,7 +26,6 @@ int16_t Touch_Wheel::wheel() {
 
     if (wheel_state == 0) return 0; // no current press
 
-    // Define adjacency
     int prev1, prev2, next1, next2;
 
     switch (wheel_state) {
