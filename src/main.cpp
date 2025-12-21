@@ -133,8 +133,12 @@ void loop() {
         u8g2->drawStr(76, 61, (String(output->track->sample_rate ) + " hz").c_str());
 
         // Battery level;
-        // u8g2->setFont(u8g2_font_tiny5_te);
-        // u8g2->drawStr(110, 8, (String(get_battery(BAT_LVL_PIN)) + "%").c_str());
+        u8g2->setFont(u8g2_font_tiny5_te);
+        if (get_battery(BAT_LVL_PIN) > V_MIN * 1.1f) {
+            u8g2->drawStr(114, 8, (String() + "BAT").c_str());
+        } else {
+            u8g2->drawStr(114, 8, (String() + "USB").c_str());
+        }
 
         // Pause indicator
         if (output->paused) {
